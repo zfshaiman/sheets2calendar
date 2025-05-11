@@ -1,0 +1,172 @@
+<!--
+Conflict Sidebar
+Version 1.5
+-->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <title>Active Conflicts</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 18px; background: #f7f7fa; }
+    h1 { font-size: 20px; margin-bottom: 16px; }
+    #conflicts { margin-top: 10px; }
+    .conflict-item {
+      margin-bottom: 16px;
+      padding: 12px 10px;
+      border-radius: 6px;
+      background: #fff7f7;
+      border-left: 4px solid #d32f2f;
+      box-shadow: 0 1px 3px #eee;
+      position: relative;
+    }
+    .conflict-type {
+      color: #d32f2f;
+      font-weight: bold;
+      margin-bottom: 2px;
+      display: inline-block;
+    }
+    .conflict-message {
+      margin: 3px 0 8px 0;
+      font-size: 15px;
+    }
+    .highlight-btn {
+      background: #ef6c00;
+      border: none;
+      color: #fff;
+      padding: 4px 14px;
+      font-size: 13px;
+      border-radius: 4px;
+      cursor: pointer;
+      float: right;
+    }
+    .highlight-btn:active { background: #ffa726; }
+    #refreshBtn {
+      background: #4285f4;
+      color: white;
+      border-radius: 4px;
+      border: none;
+      padding: 7px 14px;
+      font-size: 15px;
+      cursor: pointer;
+      margin-bottom: 8px;
+    }
+    #loadingMsg { color: #888; margin: 10px; }
+    #toast {
+      background: #43a047; color: #fff; padding: 9px 20px; border-radius: 4px;
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      z-index: 1000; display: none; box-shadow: 0 2px 8px rgba(10,50,50,0.08)
+    }
+    #errorMsg { color: #b71c1c; font-weight: bold; margin: 12px 0; }
+  </style>
+</head>
+<body>
+  <h1>Active Conflicts</h1>
+  <button id="refreshBtn" onclick="loadConflicts()">Refresh Conflicts</button>
+  <div id="conflicts"></div>
+  <div id="loadingMsg" style="display: none;">Loading…</div>
+  <div id="toast"></div>
+  <div id="errorMsg"></div>
+  <script>
+    // Loads and shows conflicts in the sidebar
+    function loadConflicts() {
+      document.getElementById('conflicts').innerHTML = '';
+      document.getElementById('loadingMsg').style.display = '';
+      document.getElementById('errorMsg').textContent = '';
+      google.script.run
+        .withSuccessHandler(displayConflicts)
+        .withFailureHandler(showError)
+        .getConflicts();
+    }
+
+    // Render the conflict list and add highlight buttons
+    function displayConflicts(conflicts) {
+      document.getElementById('loadingMsg').style.display = 'none';
+      const container = document.getElementById('conflicts');
+      if (!conflicts || conflicts.length === 0) {
+        container.innerHTML = '<div style="color:#388e3c;font-weight:bold;">✅ No conflicts detected</div>';
+        return;
+      }
+      let html = '';
+      conflicts.forEach((conflict, idx) => {
+        html += `
+          <div class="conflict-item" id="conflict-idx">
+            <div class="conflict-type">${conflict.type} Conflict</div>
+            <div class="conflict-message">${conflict.message}</div>
+            <button class="highlight-btn" onclick="toggleHighlightRows(${JSON.stringify(conflict.rows)}, this)">Highlight</button>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    // Keeps track of currently highlighted conflicts by their row arrays (converted to string keys)
+    const highlighted = {};
+
+    // Call this from your button: highlightConflictRows(rows, this)
+    function highlightConflictRows(rows, btn) {
+      const key = JSON.stringify(rows.sort()); // Sorting makes [3,4] and [4,3] the same key
+      const isHighlighted = !!highlighted[key];
+
+      if (!isHighlighted) {
+        // Highlight and mark as active
+        google.script.run
+          .withSuccessHandler(() => {
+            btn.textContent = "Unhighlight";
+            highlighted[key] = true;
+          })
+          .withFailureHandler(showError)
+          .highlightRows(rows);
+      } else {
+        // Unhighlight and mark as inactive
+        google.script.run
+          .withSuccessHandler(() => {
+            btn.textContent = "Highlight";
+            highlighted[key] = false;
+          })
+          .withFailureHandler(showError)
+          .unhighlightRows(rows);
+      }
+    }
+
+
+    function toggleHighlightRows(rows, btn) {
+      const highlighted = btn.getAttribute('data-highlighted') === 'true';
+
+      if (!highlighted) {
+        google.script.run
+          .withSuccessHandler(() => {
+            btn.textContent = "Unhighlight";
+            btn.setAttribute('data-highlighted', 'true');
+          })
+          .withFailureHandler(showError)
+          .highlightRows(rows);
+      } else {
+        google.script.run
+          .withSuccessHandler(() => {
+            btn.textContent = "Highlight";
+            btn.setAttribute('data-highlighted', 'false');
+          })
+          .withFailureHandler(showError)
+          .unhighlightRows(rows);
+      }
+    }
+    
+    // Feedback helpers
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.display = 'block';
+      setTimeout(() => t.style.display = 'none', 1700);
+    }
+    function showError(msg) {
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('errorMsg').textContent = (typeof msg === 'string') ? msg : (msg.message || 'An error occurred');
+    }
+
+    // Load on open
+    window.onload = loadConflicts;
+  </script>
+</body>
+</html>

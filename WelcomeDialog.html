@@ -1,0 +1,43 @@
+<!--
+Welcome Dialog
+Version 1.0
+-->
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; }
+      label { display: block; margin: 10px 0; }
+    </style>
+  </head>
+  <body>
+    <h2>Welcome to the new & improved Treatment Schedule for AATC</h2>
+    <div style="margin-bottom:12px;">
+      This spreadsheet now includes helpful utilities for admin staff in charge of creating the weekly schedule of events. <b>If you are a Counselor or Peer Support staff member trying to find your assigned groups, please view the <a href="#" onclick="openLink('https://calendar.google.com')">Google Calendar</a></b> associated with your work email. Your groups should appear on your calendar with the required information. If you need assistance adding the complete treatment schedule each level of care to your Google Calendar, please refer to the <a href="https://docs.google.com/document/d/1q28fWq-jx7MM8CjG2h2qfQgWDGbgZzjULFPwjRjrFOo/edit?usp=sharing">Treatment Schedule and Google Calendar tutorial.</a>
+      <br><br>
+      For admin staff: Before using the new menu functions above for the first time, Google may ask for permission to run this script on your account. <b>This is normal and safe.</b> First, ensure you are logged into your Absolute Awakenings Google Account, and click on your work account in the permissions pop-up. Select the check boxes for all of the required permissions, and click <b>"Allow"</b> when prompted.
+      <br><br>
+      If you get a warning about the app not being verified, click <b>Advanced</b>, then <b>Go to [Script Name] (unsafe)</b> to continue.<br><br>
+      If you have questions or get stuck, please email Zac for help.
+      <br><br>
+      You can reopen this message at any time by clicking on '❓ Help / Welcome' in the Schedule Tools menu.
+    </div>
+    <label>
+      <input type="checkbox" id="hideWelcome"> Don't show this message again
+    </label>
+    <button onclick="submitWelcome()" style="margin-top:12px;">OK</button>
+    <script>
+      function submitWelcome() {
+        const hide = document.getElementById('hideWelcome').checked;
+        google.script.run.setHideWelcome(hide);
+        google.script.host.close();
+      }
+      function openLink(url) {
+        window.open(url, '_blank');
+        return false; // Prevent default behavior
+      }
+    </script>
+  </body>
+</html>

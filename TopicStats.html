@@ -1,0 +1,480 @@
+<!--
+Topic Stats
+Version 1.5
+-->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <title>Topic Distribution Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+    .filters { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; }
+    .filter-group { display: flex; flex-direction: column; }
+    .filter-group label { font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #555; }
+    select { padding: 8px 12px; border-radius: 4px; border: 1px solid #ddd; }
+    button { background: #4e79a7; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #3d68a1; }
+    #chartContainer { height: 400px; width: 100%; }
+    #noDataMessage { text-align: center; color: #666; padding: 30px; font-size: 16px; }
+    .legend-item { display: flex; align-items: center; margin-right: 15px; }
+    .legend-color { width: 12px; height: 12px; margin-right: 5px; border-radius: 2px; }
+    .legend-container { display: flex; flex-wrap: wrap; margin-top: 10px; }
+    .chart-header { display: flex; justify-content: space-between; margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Topic Distribution Dashboard</h1>
+    <div class="filters">
+      <div class="filter-group">
+        <label for="weekFilter">Filter by Week:</label>
+        <select id="weekFilter">
+          <option value="all">All Weeks</option>
+          <!-- Week options will be populated dynamically -->
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="programFilter">Filter by Program:</label>
+        <select id="programFilter">
+          <option value="all">All Programs</option>
+          <!-- Program options will be populated dynamically -->
+        </select>
+      </div>
+      <button onclick="applyFilters()">Apply Filters</button>
+      <button onclick="resetFilters()">Reset</button>
+    </div>
+    
+    <div class="chart-header">
+      <h2 id="chartTitle">Topic Distribution</h2>
+      <div>
+        <label for="chartType">Chart Type:</label>
+        <select id="chartType" onchange="updateChartType()">
+          <option value="bar">Bar Chart</option>
+          <option value="horizontalBar">Horizontal Bar</option>
+          <option value="pie">Pie Chart</option>
+          <option value="doughnut">Doughnut Chart</option>
+        </select>
+      </div>
+    </div>
+    
+    <div id="chartContainer">
+      <canvas id="topicChart"></canvas>
+      <div id="noDataMessage" style="display:none">No data available for the selected filters</div>
+    </div>
+    <div id="legendContainer" class="legend-container"></div>
+  </div>
+
+<script>
+// Global variables
+let topicChart = null;
+let allTopicData = {};
+let weeks = [];
+let programs = [];
+let topics = [];
+const colorPalette = [
+  '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', 
+  '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab',
+  '#bc5090', '#ffa600', '#003f5c', '#7a5195', '#ef5675'
+];
+
+// On page load
+window.onload = function() {
+  loadTopicData();
+};
+
+// Load topic data from Apps Script
+function loadTopicData() {
+  google.script.run
+    .withSuccessHandler(handleTopicData)
+    .withFailureHandler(handleError)
+    .getTopicStatsData();
+}
+
+// Process the topic data
+function handleTopicData(data) {
+  console.log("Received topic data:", data);
+  
+  if (!data || data.length === 0) {
+    showNoDataMessage(true);
+    return;
+  }
+  
+  // Process the data
+  allTopicData = data;
+  
+  // Extract unique weeks, programs, and topics
+  weeks = [...new Set(data.map(item => item.week))].sort();
+  programs = [...new Set(data.map(item => item.program))].sort();
+  topics = [...new Set(data.map(item => item.topic))].sort();
+  
+  // Populate filter dropdowns
+  populateDropdown('weekFilter', weeks);
+  populateDropdown('programFilter', programs);
+  
+  // Initial render
+  renderChart(allTopicData);
+}
+
+// Populate a dropdown with options
+function populateDropdown(elementId, options) {
+  const dropdown = document.getElementById(elementId);
+  const currentValue = dropdown.value;
+  
+  // Clear existing options (except first)
+  while (dropdown.options.length > 1) {
+    dropdown.remove(1);
+  }
+  
+  // Add new options
+  options.forEach(option => {
+    const optElement = document.createElement('option');
+    optElement.value = option;
+    optElement.textContent = option;
+    dropdown.appendChild(optElement);
+  });
+  
+  // Restore previous value if it exists
+  if (options.includes(currentValue)) {
+    dropdown.value = currentValue;
+  }
+}
+
+// Apply filters when button is clicked
+function applyFilters() {
+  const weekFilter = document.getElementById('weekFilter').value;
+  const programFilter = document.getElementById('programFilter').value;
+  
+  let filteredData = [...allTopicData];
+  
+  // Apply week filter
+  if (weekFilter !== 'all') {
+    filteredData = filteredData.filter(item => item.week === weekFilter);
+  }
+  
+  // Apply program filter
+  if (programFilter !== 'all') {
+    filteredData = filteredData.filter(item => item.program === programFilter);
+  }
+  
+  // Update chart title
+  updateChartTitle(weekFilter, programFilter);
+  
+  // Render chart with filtered data
+  renderChart(filteredData);
+}
+
+// Reset all filters
+function resetFilters() {
+  document.getElementById('weekFilter').value = 'all';
+  document.getElementById('programFilter').value = 'all';
+  updateChartTitle('all', 'all');
+  renderChart(allTopicData);
+}
+
+// Update chart type when dropdown changes
+function updateChartType() {
+  const chartType = document.getElementById('chartType').value;
+  const weekFilter = document.getElementById('weekFilter').value;
+  const programFilter = document.getElementById('programFilter').value;
+  
+  let filteredData = [...allTopicData];
+  
+  if (weekFilter !== 'all') {
+    filteredData = filteredData.filter(item => item.week === weekFilter);
+  }
+  
+  if (programFilter !== 'all') {
+    filteredData = filteredData.filter(item => item.program === programFilter);
+  }
+  
+  renderChart(filteredData, chartType);
+}
+
+// Update chart title based on filters
+function updateChartTitle(weekFilter, programFilter) {
+  let title = 'Topic Distribution';
+  
+  if (weekFilter !== 'all') {
+    title += ` for ${weekFilter}`;
+  }
+  
+  if (programFilter !== 'all') {
+    title += ` - ${programFilter}`;
+  }
+  
+  document.getElementById('chartTitle').textContent = title;
+}
+
+// Render the chart based on data and filters
+function renderChart(data, chartType) {
+  chartType = chartType || document.getElementById('chartType').value;
+  const ctx = document.getElementById('topicChart').getContext('2d');
+  
+  // Destroy previous chart if it exists
+  if (topicChart) {
+    topicChart.destroy();
+  }
+  
+  // Show 'no data' message if needed
+  if (!data || data.length === 0) {
+    showNoDataMessage(true);
+    return;
+  } else {
+    showNoDataMessage(false);
+  }
+  
+  // Aggregate data for the chart
+  const aggregatedData = aggregateTopicData(data, chartType);
+  
+  if (chartType === 'pie' || chartType === 'doughnut') {
+    renderPieChart(ctx, aggregatedData);
+  } else {
+    renderBarChart(ctx, aggregatedData, chartType === 'horizontalBar');
+  }
+}
+
+// Aggregate topic data based on chart type and filters
+function aggregateTopicData(data, chartType) {
+  const weekFilter = document.getElementById('weekFilter').value;
+  const programFilter = document.getElementById('programFilter').value;
+  
+  // For pie charts, we want to show topic distribution across the entire selection
+  if (chartType === 'pie' || chartType === 'doughnut') {
+    const topicCounts = {};
+    
+    data.forEach(item => {
+      if (!topicCounts[item.topic]) {
+        topicCounts[item.topic] = 0;
+      }
+      topicCounts[item.topic] += item.count;
+    });
+    
+    return {
+      labels: Object.keys(topicCounts),
+      datasets: [{
+        data: Object.values(topicCounts),
+        backgroundColor: Object.keys(topicCounts).map((_, i) => colorPalette[i % colorPalette.length])
+      }]
+    };
+  }
+  
+  // For bar charts, we'll show either:
+  // - Program as x-axis, topics as series (if no program filter)
+  // - Week as x-axis, topics as series (if program filter is set)
+  // - Topic as x-axis, count as value (if both program and week are set)
+  
+  if (programFilter !== 'all') {
+    // Program is filtered, so group by week and topic
+    if (weekFilter !== 'all') {
+      // Both program and week are filtered, so just show topics
+      const topicCounts = {};
+      
+      data.forEach(item => {
+        if (!topicCounts[item.topic]) {
+          topicCounts[item.topic] = 0;
+        }
+        topicCounts[item.topic] += item.count;
+      });
+      
+      return {
+        labels: Object.keys(topicCounts),
+        datasets: [{
+          label: 'Count',
+          data: Object.values(topicCounts),
+          backgroundColor: colorPalette[0]
+        }]
+      };
+    } else {
+      // Program filtered, week not filtered - group by week
+      const weekTopicData = {};
+      const allTopics = [...new Set(data.map(item => item.topic))];
+      
+      data.forEach(item => {
+        if (!weekTopicData[item.week]) {
+          weekTopicData[item.week] = {};
+          allTopics.forEach(topic => {
+            weekTopicData[item.week][topic] = 0;
+          });
+        }
+        weekTopicData[item.week][item.topic] += item.count;
+      });
+      
+      const weeks = Object.keys(weekTopicData).sort();
+      
+      return {
+        labels: weeks,
+        datasets: allTopics.map((topic, i) => ({
+          label: topic,
+          data: weeks.map(week => weekTopicData[week][topic] || 0),
+          backgroundColor: colorPalette[i % colorPalette.length]
+        }))
+      };
+    }
+  } else {
+    // Program not filtered - group by program
+    if (weekFilter !== 'all') {
+      // Week filtered, program not filtered - group by program
+      const programTopicData = {};
+      const allTopics = [...new Set(data.map(item => item.topic))];
+      
+      data.forEach(item => {
+        if (!programTopicData[item.program]) {
+          programTopicData[item.program] = {};
+          allTopics.forEach(topic => {
+            programTopicData[item.program][topic] = 0;
+          });
+        }
+        programTopicData[item.program][item.topic] += item.count;
+      });
+      
+      const programs = Object.keys(programTopicData).sort();
+      
+      return {
+        labels: programs,
+        datasets: allTopics.map((topic, i) => ({
+          label: topic,
+          data: programs.map(program => programTopicData[program][topic] || 0),
+          backgroundColor: colorPalette[i % colorPalette.length]
+        }))
+      };
+    } else {
+      // Neither program nor week are filtered - show overall program distribution
+      const programTopicData = {};
+      const allTopics = [...new Set(data.map(item => item.topic))];
+      
+      data.forEach(item => {
+        if (!programTopicData[item.program]) {
+          programTopicData[item.program] = {};
+          allTopics.forEach(topic => {
+            programTopicData[item.program][topic] = 0;
+          });
+        }
+        programTopicData[item.program][item.topic] += item.count;
+      });
+      
+      const programs = Object.keys(programTopicData).sort();
+      
+      return {
+        labels: programs,
+        datasets: allTopics.map((topic, i) => ({
+          label: topic,
+          data: programs.map(program => programTopicData[program][topic] || 0),
+          backgroundColor: colorPalette[i % colorPalette.length]
+        }))
+      };
+    }
+  }
+}
+
+// Render a bar chart
+function renderBarChart(ctx, chartData, horizontal) {
+  topicChart = new Chart(ctx, {
+    type: 'bar',
+    data: chartData,
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: horizontal ? 'y' : 'x',
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true }
+      },
+      plugins: {
+        legend: {
+          display: false
+        }
+      }
+    }
+  });
+  
+  // Generate custom legend
+  generateCustomLegend(chartData.datasets);
+}
+
+// Render a pie chart
+function renderPieChart(ctx, chartData) {
+  topicChart = new Chart(ctx, {
+    type: document.getElementById('chartType').value,
+    data: chartData,
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        }
+      }
+    }
+  });
+  
+  // Generate custom legend for pie chart
+  generateCustomLegend([{
+    label: 'Topics',
+    backgroundColor: chartData.datasets[0].backgroundColor,
+    data: chartData.datasets[0].data
+  }], chartData.labels);
+}
+
+// Generate a custom legend
+function generateCustomLegend(datasets, customLabels) {
+  const legendContainer = document.getElementById('legendContainer');
+  legendContainer.innerHTML = '';
+  
+  if (customLabels) {
+    // For pie charts
+    customLabels.forEach((label, i) => {
+      const item = document.createElement('div');
+      item.className = 'legend-item';
+      
+      const colorBox = document.createElement('div');
+      colorBox.className = 'legend-color';
+      colorBox.style.backgroundColor = datasets[0].backgroundColor[i];
+      
+      const labelText = document.createElement('span');
+      labelText.textContent = `${label} (${datasets[0].data[i]})`;
+      
+      item.appendChild(colorBox);
+      item.appendChild(labelText);
+      legendContainer.appendChild(item);
+    });
+  } else {
+    // For bar charts
+    datasets.forEach(dataset => {
+      const item = document.createElement('div');
+      item.className = 'legend-item';
+      
+      const colorBox = document.createElement('div');
+      colorBox.className = 'legend-color';
+      colorBox.style.backgroundColor = Array.isArray(dataset.backgroundColor) ? 
+                                      dataset.backgroundColor[0] : dataset.backgroundColor;
+      
+      const labelText = document.createElement('span');
+      labelText.textContent = dataset.label;
+      
+      item.appendChild(colorBox);
+      item.appendChild(labelText);
+      legendContainer.appendChild(item);
+    });
+  }
+}
+
+// Show/hide the 'no data' message
+function showNoDataMessage(show) {
+  document.getElementById('noDataMessage').style.display = show ? 'block' : 'none';
+  document.getElementById('topicChart').style.display = show ? 'none' : 'block';
+  document.getElementById('legendContainer').style.display = show ? 'none' : 'flex';
+}
+
+// Handle errors
+function handleError(error) {
+  console.error('Error loading topic data:', error);
+  showNoDataMessage(true);
+  document.getElementById('noDataMessage').textContent = 'Error loading data: ' + error;
+}
+</script>
+</body>
+</html>

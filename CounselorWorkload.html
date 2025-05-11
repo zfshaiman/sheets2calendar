@@ -1,0 +1,102 @@
+<!--
+Counselor Workload
+Version 1.0
+-->
+
+<!DOCTYPE html>
+<html>
+  <head>
+  <base target="_top">
+  <title>Counselor Workload</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; }
+      .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+      .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+      #chartContainer { height: 400px; }
+      .summary-item { margin: 10px 0; padding: 15px; background: #f8f9fa; border-radius: 6px; }
+    </style>
+  </head>
+<body>
+  <div class="card">
+    <h1>Weekly Schedule Analytics</h1>
+      <button onclick="loadData()" class="button">🔄 Refresh Data</button>
+      <span id="dateRange"></span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Counselor Group Assignments</h2>
+      <div id="chartContainer">
+      <canvas id="staffChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Quick Stats</h2>
+    <div id="summary"></div>
+      <h3 style="margin-top:20px;">Active Conflicts</h3>
+    <div id="conflicts"></div>
+    </div>
+  </div>
+
+<script>
+let staffChart;
+
+function loadData() {
+  google.script.run
+  .withSuccessHandler(data => {
+    document.getElementById('dateRange').textContent = `Week of ${data.startDate} - ${data.endDate}`;
+    updateChart(data.staffData);
+    updateSummary(data.summary);
+    updateConflicts(data.conflicts);
+    })
+  .getCounselorWorkload();
+  }
+
+function updateChart(staffData) {
+  const ctx = document.getElementById('staffChart').getContext('2d');
+
+  if (staffChart) staffChart.destroy();
+
+  staffChart = new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: staffData.map(item => item[0]),
+    datasets: [{
+      label: 'Groups Facilitated',
+      data: staffData.map(item => item[1]),
+      backgroundColor: '#3e95cd'
+      }]
+    },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: { beginAtZero: true }
+      }
+    }
+  });
+}
+
+function updateSummary(summary) {
+  const html = `
+  <div class="summary-item">Total Groups: ${summary.totalGroups}</div>
+  <div class="summary-item">Unique Rooms Used: ${summary.uniqueRooms}</div>
+  <div class="summary-item">Staff Members: ${summary.uniqueStaff}</div>
+  `;
+  document.getElementById('summary').innerHTML = html;
+  }
+
+function updateConflicts(conflicts) {
+  const conflictList = conflicts.length ?
+    conflicts.map(c => `<div class="summary-item" style="color:#dc3545;">${c.type}: ${c.message}</div>`).join('') :
+      '<div class="summary-item">No conflicts detected 🎉</div>';
+    document.getElementById('conflicts').innerHTML = conflictList;
+  }
+
+  // Initial load
+  window.onload = loadData;
+</script>
+</body>
+</html>

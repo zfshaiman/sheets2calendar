@@ -1,102 +1,131 @@
-<!--
-Counselor Workload
-Version 1.0
--->
-
 <!DOCTYPE html>
 <html>
-  <head>
+<head>
   <base target="_top">
-  <title>Counselor Workload</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 20px; }
-      .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
-      .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
-      #chartContainer { height: 400px; }
-      .summary-item { margin: 10px 0; padding: 15px; background: #f8f9fa; border-radius: 6px; }
-    </style>
-  </head>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .chart-container { height: 500px; }
+  </style>
+</head>
 <body>
-  <div class="card">
-    <h1>Weekly Schedule Analytics</h1>
-      <button onclick="loadData()" class="button">🔄 Refresh Data</button>
-      <span id="dateRange"></span>
+  <h2>Clinical Staff Workload by Program</h2>
+  <div class="chart-container">
+    <canvas id="staffChart"></canvas>
   </div>
-
-  <div class="grid">
-    <div class="card">
-      <h2>Counselor Group Assignments</h2>
-      <div id="chartContainer">
-      <canvas id="staffChart"></canvas>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Quick Stats</h2>
-    <div id="summary"></div>
-      <h3 style="margin-top:20px;">Active Conflicts</h3>
-    <div id="conflicts"></div>
-    </div>
-  </div>
-
-<script>
-let staffChart;
-
-function loadData() {
-  google.script.run
-  .withSuccessHandler(data => {
-    document.getElementById('dateRange').textContent = `Week of ${data.startDate} - ${data.endDate}`;
-    updateChart(data.staffData);
-    updateSummary(data.summary);
-    updateConflicts(data.conflicts);
-    })
-  .getCounselorWorkload();
-  }
-
-function updateChart(staffData) {
-  const ctx = document.getElementById('staffChart').getContext('2d');
-
-  if (staffChart) staffChart.destroy();
-
-  staffChart = new Chart(ctx, {
-  type: 'bar',
-  data: {
-    labels: staffData.map(item => item[0]),
-    datasets: [{
-      label: 'Groups Facilitated',
-      data: staffData.map(item => item[1]),
-      backgroundColor: '#3e95cd'
-      }]
-    },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: { beginAtZero: true }
-      }
+  
+  <script>
+    // Chart instance
+    let staffChart = null;
+    
+    // Color mapping for programs
+    const programColors = {
+      'MH PC': '#1E88E5',    // Blue
+      'MH IOP': '#ADD8E6',   // Light Blue
+      'MH OP': '#00ACC1',    // Teal
+      'SUD PC only': '#B7410E',   // Rust
+      'SUD PC/IOP': '#FF0000', // Red
+      'SUD IOP': '#FF8F00',  // Orange
+      'SUD OP': '#FFFF00'    // Yellow
+    };
+    
+    // Default color for any other programs
+    const defaultColor = '#9E9E9E'; // Gray
+    
+    // Get color for a program
+    function getColorForProgram(program) {
+      return programColors[program] || defaultColor;
     }
-  });
-}
-
-function updateSummary(summary) {
-  const html = `
-  <div class="summary-item">Total Groups: ${summary.totalGroups}</div>
-  <div class="summary-item">Unique Rooms Used: ${summary.uniqueRooms}</div>
-  <div class="summary-item">Staff Members: ${summary.uniqueStaff}</div>
-  `;
-  document.getElementById('summary').innerHTML = html;
-  }
-
-function updateConflicts(conflicts) {
-  const conflictList = conflicts.length ?
-    conflicts.map(c => `<div class="summary-item" style="color:#dc3545;">${c.type}: ${c.message}</div>`).join('') :
-      '<div class="summary-item">No conflicts detected 🎉</div>';
-    document.getElementById('conflicts').innerHTML = conflictList;
-  }
-
-  // Initial load
-  window.onload = loadData;
-</script>
+    
+    // Update chart with data
+    function updateChart(data) {
+      const ctx = document.getElementById('staffChart').getContext('2d');
+      
+      if (staffChart) staffChart.destroy();
+      
+      const counselors = data.counselors;
+      const programs = data.programs;
+      
+      // Create datasets for each program
+      const datasets = programs.map(program => ({
+        label: program,
+        data: counselors.map(counselor => counselor.programs[program] || 0),
+        backgroundColor: getColorForProgram(program),
+        borderColor: getColorForProgram(program),
+        borderWidth: 0
+      }));
+      
+      // Create the chart
+      staffChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: counselors.map(counselor => counselor.name),
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Events Assigned to Clinical Staff by Program',
+              font: { size: 18 }
+            },
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: { boxWidth: 15, padding: 15 }
+            },
+            tooltip: {
+              callbacks: {
+                footer: function(tooltipItems) {
+                  const counselorIndex = tooltipItems[0].dataIndex;
+                  const total = counselors[counselorIndex].total;
+                  return `Total Events: ${total}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: { 
+              stacked: true,
+              title: {
+                display: true,
+                text: 'Clinical Staff',
+                font: { size: 14 }
+              },
+              grid: { display: false }
+            },
+            y: { 
+              stacked: true, 
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Number of Events',
+                font: { size: 14 }
+              },
+              grid: { color: '#E0E0E0' },
+              ticks: { stepSize: 5 }
+            }
+          }
+        }
+      });
+    }
+    
+    // Load data from server
+    google.script.run
+      .withSuccessHandler(function(jsonData) {
+        const data = JSON.parse(jsonData);
+        if (data.error) {
+          alert(data.error);
+        } else {
+          updateChart(data);
+        }
+      })
+      .withFailureHandler(function(error) {
+        alert('Error: ' + error.message);
+      })
+      .getCounselorWorkload();
+  </script>
 </body>
 </html>

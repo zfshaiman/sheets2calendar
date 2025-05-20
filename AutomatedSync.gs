@@ -1,3 +1,8 @@
+// AutomatedSync.gs v1.1
+// Version History 
+// 1.1 - cleaned up logging
+// 1.0 - initial release
+
 /**
  * Automated version of syncCalendarEvents that runs without user prompts
  * Can be called from time-based triggers
@@ -19,7 +24,7 @@ function automatedSyncCalendarEvents() {
   }
   
   // Log sync start with selected sheet
-  logSheet.appendRow([new Date(), 'Sync started', 'Selected sheet: ' + sheet.getName()]);
+  logSheet.appendRow([new Date(), 'AutoSync started', 'Selected sheet: ' + sheet.getName()]);
   
   // Load configuration and data
   loadConfiguration();
@@ -169,7 +174,7 @@ function automatedSyncCalendarEvents() {
               });
               newGuests.forEach(email => {
                 if (!currentSet.has(email)) {
-                  calendarEvent.addGuest(email, {sendInvites: sendInvites});
+                  calendarEvent.addGuest(email);
                 }
               });
             }
@@ -203,8 +208,8 @@ function automatedSyncCalendarEvents() {
   });
 
   // Log results
-  const message = `Results: Created: ${created}, Updated: ${updated}, Skipped: ${skipped}, Errors: ${errors}`;
-  logSheet.appendRow([new Date(), 'Sync completed', message, events.length]);
+  const message = `AutoSync Results: Created: ${created}, Updated: ${updated}, Skipped: ${skipped}, Errors: ${errors}`;
+  logSheet.appendRow([new Date(), 'AutoSync completed', message, events.length]);
   
   // Log detailed errors if any
   if (errorLog.length > 0) {

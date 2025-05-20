@@ -1,8 +1,9 @@
-// CalendarSync.gs v1.2
+// CalendarSync.gs v1.3
 // Handles all Google Calendar integration
 // Contains: syncCalendarEvents(), createEvents(), updateEvents(), etc.
 // Dependencies: Google Apps Scripts services, global variables
 // Version History 
+// 1.3 - added logging feature
 // 1.2 - cleaned up a title error, moved constants, updated event handling for single events
 
 /**
@@ -18,6 +19,10 @@ function syncCalendarEvents() {
     return;
   }
 
+  // Setup error logging
+  const errorSheet = getOrCreateSheet(ss, 'SyncErrors');
+  writeToLog(ss, 'Manual Sync started', 'Selected sheet: ' + sheet.getName());
+
   // Load configuration and data
   loadConfiguration();
   const sendInvites = String(config['SEND_INVITES']).toLowerCase() === 'true';
@@ -25,6 +30,9 @@ function syncCalendarEvents() {
   const headers = sheet.getDataRange().getValues()[0];
   const calendarEventIdCol = headers.indexOf("CalendarEventId");
   const ui = SpreadsheetApp.getUi();
+
+  // Log configuration loaded
+  writeToLog(ss, 'Configuration loaded', `Processing ${events.length} events`);
 
   // --- Conflict Check ---
   const conflicts = [];
@@ -62,6 +70,7 @@ function syncCalendarEvents() {
   });
 
   if (conflicts.length > 0) {
+    logError(ss, 'Conflicts', `${conflicts.length} Conflicts Found: ${conflicts.join('; ')}`);
     const proceed = ui.alert(
       `${conflicts.length} Conflicts Found!`,
       `CONFLICTS:\n\n${conflicts.join('\n')}\n\nContinue anyway?`,
@@ -173,7 +182,7 @@ function syncCalendarEvents() {
               });
               newGuests.forEach(email => {
                 if (!currentSet.has(email)) {
-                  calendarEvent.addGuest(email, {sendInvites: sendInvites}); // Only pass the email string
+                  calendarEvent.addGuest(email); // Only pass the email string
                 }
               });
             }
@@ -201,8 +210,16 @@ function syncCalendarEvents() {
     } catch (error) {
       errors++;
       errorLog.push(`Row ${event.row}: ${error.message}`);
+      writeToLog(ss, "ERROR", `Row ${row}: ${error.message}`);
     }
   });
+
+
+
+  // Log detailed errors if any
+  if (errorLog.length > 0) {
+    logError(ss, 'Batch Errors', errorLog.join('\n'));
+  }
 
   // Show results
   const message = `Results:
@@ -211,12 +228,46 @@ function syncCalendarEvents() {
   ⏩ Skipped: ${skipped}
   ❌ Errors: ${errors}`;
 
-  ui.alert('Sync Complete', errorLog.length > 0 ? 
+  ui.alert('Manual Sync Complete', errorLog.length > 0 ? 
     `${message}\n\nError Details:\n${errorLog.join('\n')}` : message, ui.ButtonSet.OK);
+    
+  // Log results
+  // const message = `Results: Created: ${created}, Updated: ${updated}, Skipped: ${skipped}, Errors: ${errors}`;
+  writeToLog(ss, 'Manual Sync completed', message, events.length);
 }
 
 function areSetsEqual(a, b) {
   return a.size === b.size && [...a].every(v => b.has(v));
+}
+
+function getOrCreateSheet(spreadsheet, sheetName) {
+  let sheet = spreadsheet.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(sheetName);
+    
+    // Setup headers based on sheet type
+    if (sheetName === 'SyncErrors') {
+      sheet.appendRow(['Timestamp', 'Error Type', 'Error Details']);
+    } else if (sheetName === 'SyncLog') {
+      sheet.appendRow(['Timestamp', 'Action', 'Details', 'Event Count']);
+    }
+    
+    // Format headers
+    sheet.getRange(1, 1, 1, sheet.getLastColumn()).setFontWeight('bold');
+  }
+  return sheet;
+}
+
+function writeToLog(ss, type, message, count) {
+  const logSheet = getOrCreateSheet(ss, 'SyncLog');
+  const timestamp = new Date().toLocaleString();
+  logSheet.appendRow([timestamp, type, message, count || '']);
+}
+
+function logError(ss, errorType, errorDetails) {
+  const errorSheet = getOrCreateSheet(ss, 'SyncErrors');
+  errorSheet.appendRow([new Date(), errorType, errorDetails]);
+  console.error(`${errorType}: ${errorDetails}`);
 }
 
 /**
@@ -464,7 +515,7 @@ function previewCalendarSync() {
   .setWidth(800)
   .setHeight(600);
 
-  ui.showModalDialog(html, 'Sync Preview');
+  ui.showModalDialog(html, 'Manual Sync Preview');
 }
 
 
